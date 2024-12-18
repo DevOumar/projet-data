@@ -1,3 +1,5 @@
+import os
+os.system("pip install --upgrade pip")
 import yfinance as yf
 import pandas as pd
 import numpy as np
