@@ -236,7 +236,13 @@ else:
     """, unsafe_allow_html=True)
 
 # Traitement pour le premier actif
-donnees = donnees_brutes[['Adj Close']].copy()
+if 'Adj Close' in donnees_brutes.columns:
+    donnees = donnees_brutes[['Adj Close']].copy()
+else:
+    donnees = donnees_brutes[['Close']].copy()
+
+# Vérifier s'il y a des valeurs manquantes et les traiter
+donnees = donnees.fillna(method='ffill')
 donnees.columns = ['Prix Ajusté']
 donnees['Rendement Quotidien'] = donnees['Prix Ajusté'].pct_change()
 donnees['Rendement Cumulé'] = (1 + donnees['Rendement Quotidien']).cumprod()
@@ -337,6 +343,7 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
    
     # Traitement des données pour le second actif
     donnees_autre = donnees_autre_actif[['Adj Close']].copy()
+    
     donnees_autre.columns = ['Prix Ajusté']
     donnees_autre['Rendement Quotidien'] = donnees_autre['Prix Ajusté'].pct_change()
     donnees_autre['Rendement Cumulé'] = (1 + donnees_autre['Rendement Quotidien']).cumprod()
