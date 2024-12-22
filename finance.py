@@ -5,12 +5,15 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from fpdf import FPDF
+import plotly.io as pio
 import streamlit as st
 from sklearn.linear_model import LinearRegression
+import plotly.graph_objs as go
+import platform
+import mplcursors
 
 # Configuration de la page
 st.set_page_config(page_title="Simulateur d'Investissement", layout="wide")
-
 # Ajout de styles personnalisés
 st.markdown("""
     <style>
@@ -87,10 +90,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Message de bienvenue
+
+
 st.markdown("""
-    <div class="welcome-box">
-        <h1>Bienvenue dans le Simulateur d'Investissement</h1>
+    <div class="welcome-box" style="background-color: #F9F9F9; padding: 20px; border-radius: 10px;">
+        <h1 style="color: #0073E6; text-align: center; margin: 0;">Bienvenue dans le Simulateur d'Investissement</h1>
     </div>
 """, unsafe_allow_html=True)
 
@@ -122,8 +126,6 @@ def sidebar_parameters():
 
 # Appel des paramètres
 actif, autre_actif, date_debut, date_fin, taux_sans_risque, montant_initial, montant_contribution, frequence_contributions, frais_gestion = sidebar_parameters()
-
-
 # Fonction pour vérifier la validité du symbole
 def verifier_symbole(actif):
     try:
@@ -162,9 +164,12 @@ rendement_total = ((valeur_finale - valeur_initiale) / valeur_initiale) * 100
 nombre_annees = (donnees.index[-1] - donnees.index[0]).days / 365.25
 cagr = ((valeur_finale / valeur_initiale) ** (1 / nombre_annees) - 1) * 100
 
-# Affichage des métriques pour un seul actif ou deux actifs
-st.write("### Analyse des performances")
 
+st.markdown("""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 20px; width: 400px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0;">Analyse des performances</h3>
+    </div>
+""", unsafe_allow_html=True)
 
 # Vérification si le second actif est présent
 if donnees_autre_actif is not None and not donnees_autre_actif.empty:
@@ -183,8 +188,6 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
     cagr_autre = ((valeur_finale_autre / valeur_initiale_autre) ** (1 / nombre_annees) - 1) * 100
 else:
     donnees_autre = None  # Assurez-vous que cette variable est définie
-
-
 
 if donnees_autre is not None:
     st.markdown(f"""
@@ -226,26 +229,79 @@ else:
     </table>
     """, unsafe_allow_html=True)
 
+# Traitement pour le premier actif
+donnees = donnees_brutes[['Adj Close']].copy()
+donnees.columns = ['Prix Ajusté']
+donnees['Rendement Quotidien'] = donnees['Prix Ajusté'].pct_change()
+donnees['Rendement Cumulé'] = (1 + donnees['Rendement Quotidien']).cumprod()
 
-
-# Graphique comparatif des rendements cumulés
-st.write("### Comparaison des rendements cumulés")
-fig, ax = plt.subplots(figsize=(12, 6))
-
-# Tracer les rendements cumulés pour chaque actif
-ax.plot(donnees.index, donnees['Rendement Cumulé'], label=f"Premier Actif : {actif.upper()}", color='blue')
+# Télécharger les données pour l'autre actif si fourni
+donnees_autre = None
 if donnees_autre_actif is not None:
-    ax.plot(donnees_autre.index, donnees_autre['Rendement Cumulé'], label=f"Second Actif : {autre_actif.upper()}", color='green')
+    donnees_autre = donnees_autre_actif[['Adj Close']].copy()
+    donnees_autre.columns = ['Prix Ajusté']
+    donnees_autre['Rendement Quotidien'] = donnees_autre['Prix Ajusté'].pct_change()
+    donnees_autre['Rendement Cumulé'] = (1 + donnees_autre['Rendement Quotidien']).cumprod()
 
-# Ajouter des étiquettes et une légende
-ax.set_xlabel('Date')
-ax.set_ylabel('Rendement Cumulé')
-ax.legend()
+# Déterminer dynamiquement le titre en fonction du nombre d'actifs
+if donnees_autre is not None:
+    petit_titre = "Comparaison des rendements cumulés"
+else:
+    petit_titre = "Rendement cumulé"
 
-# Afficher le graphique
-st.pyplot(fig)
+# Graphique interactif avec Plotly
+trace1 = go.Scatter(
+    x=donnees.index, 
+    y=donnees['Rendement Cumulé'], 
+    mode='lines',  # Affichage des lignes
+    name=f"Premier Actif : {actif.upper()}", 
+    line=dict(color='blue', width=1),  # Lignes bleues, largeur réduite
+    hovertext=donnees['Rendement Cumulé'].round(2),  # Afficher les valeurs au survol
+    hoverinfo='text'
+)
+
+if donnees_autre is not None:
+    st.markdown("""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; width: 600px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Comparaison des rendements cumulés</h3>
+    </div>
+""", unsafe_allow_html=True)
+
+    trace2 = go.Scatter(
+        x=donnees_autre.index, 
+        y=donnees_autre['Rendement Cumulé'], 
+        mode='lines',  # Affichage des lignes
+        name=f"Second Actif : {autre_actif.upper()}", 
+        line=dict(color='green', width=1),  # Lignes vertes, largeur réduite
+        hovertext=donnees_autre['Rendement Cumulé'].round(2),  # Afficher les valeurs au survol
+        hoverinfo='text'
+    )
+    data = [trace1, trace2]
+else:
+    st.markdown("""
+    <br><br><br> <!-- Trois lignes vides avant le titre -->
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; width: 600px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Rendement cumulé</h3>
+    </div>
+""", unsafe_allow_html=True)
 
 
+    data = [trace1]
+
+# Définir le titre du graphique en fonction du nombre d'actifs
+layout = go.Layout(
+    title=petit_titre,  # Dynamique : titre qui change en fonction du nombre d'actifs
+    xaxis=dict(title='Date'),
+    yaxis=dict(title='Rendement Cumulé'),
+    plot_bgcolor='white',  # Fond du graphique en blanc pour un look épuré
+    hovermode='x unified',  # Affichage des informations au survol de manière unifiée pour tous les éléments
+    title_x=0.5,  # Centrer le titre horizontalement
+    title_y=0.01,  # Placer le titre juste au-dessus de l'axe X (proche du bas)
+    title_xanchor="center",  # Centrer le titre horizontalement
+    title_yanchor="bottom",  # Positionner le titre juste au-dessus de l'axe X
+)
+fig = go.Figure(data=data, layout=layout)
+st.plotly_chart(fig)
 
  # Calcul des rendements mensuels
 donnees['Mois'] = donnees.index.to_period('M')  # Regrouper par mois
@@ -279,10 +335,15 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
     donnees_autre['Rendement Quotidien'] = donnees_autre['Prix Ajusté'].pct_change()
     donnees_autre['Rendement Cumulé'] = (1 + donnees_autre['Rendement Quotidien']).cumprod()
 
- # Histogramme(s) des rendements avec barres positives en vert et négatives en rouge
+# Histogramme(s) des rendements avec barres positives en vert et négatives en rouge
 if donnees_autre_actif is not None and not donnees_autre_actif.empty:
 
-    st.write(f"### Distribution des rendements ({frequence_contributions} - {actif.upper()} et {autre_actif.upper()})")
+    st.markdown(f"""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Distribution des rendements </h3>
+    </div>
+""", unsafe_allow_html=True)
+
     col1, col2 = st.columns(2)
 
     # Premier actif
@@ -309,6 +370,9 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
         ax.legend()
         st.pyplot(fig)
 
+        # Ajouter un titre dynamique sous le graphique avec taille réduite
+        st.markdown(f"<h6 style='text-align: center; color: black;'>Distribution des rendements ({frequence_contributions} - {actif.upper()})</h6>", unsafe_allow_html=True)
+
     # Deuxième actif
     with col2:
         fig, ax = plt.subplots(figsize=(6, 4))
@@ -333,9 +397,17 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
         ax.legend()
         st.pyplot(fig)
 
+        # Ajouter un titre dynamique sous le graphique avec taille réduite
+        st.markdown(f"<h6 style='text-align: center; color: black;'>Distribution des rendements ({frequence_contributions} - {autre_actif.upper()})</h6>", unsafe_allow_html=True)
+
 else:
     # Histogramme pour un seul actif
-    st.write(f"### Distribution des rendements ({frequence_contributions} - {actif.upper()})")
+    st.markdown(f"""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Distribution des rendements </h3>
+    </div>
+""", unsafe_allow_html=True)
+
     fig, ax = plt.subplots(figsize=(10, 5))
     rendements = donnees['Rendement Quotidien'].dropna()
 
@@ -358,9 +430,15 @@ else:
     ax.legend()
     st.pyplot(fig)
 
+    # Ajouter un titre dynamique sous le graphique avec taille réduite
+    st.markdown(f"<h6 style='text-align: center; color: black;'>Distribution des rendements ({frequence_contributions} - {actif.upper()})</h6>", unsafe_allow_html=True)
 
 # Visualisation de la volatilité avec boîte à moustaches
-st.write(f"### Volatilité des rendements ({frequence_contributions})")
+st.markdown(f"""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Volatilité des rendements </h3>
+    </div>
+""", unsafe_allow_html=True)
 
 if donnees_autre_actif is not None and not donnees_autre_actif.empty:
     # Deux boîtes à moustaches côte à côte
@@ -383,6 +461,9 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
         ax.set_xlabel("Rendement")
         st.pyplot(fig)
 
+        # Ajouter un petit titre sous le graphique pour le premier actif avec une taille de police réduite
+        st.markdown(f"<h6 style='text-align: center; color: black;'>Volatilité des rendements - {frequence_contributions} - {actif.upper()}</h6>", unsafe_allow_html=True)
+
     # Boîte à moustaches pour le deuxième actif
     with col2:
         # Calculer les rendements pour le deuxième actif
@@ -403,6 +484,10 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
 
         ax.set_xlabel("Rendement")
         st.pyplot(fig)
+
+        # Ajouter un petit titre sous le graphique pour le deuxième actif avec une taille de police réduite
+        st.markdown(f"<h6 style='text-align: center; color: black;'>Volatilité des rendements - {frequence_contributions} - {autre_actif.upper()}</h6>", unsafe_allow_html=True)
+
 else:
     # Une seule boîte à moustaches si aucun deuxième actif
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -419,6 +504,9 @@ else:
 
     ax.set_xlabel("Rendement")
     st.pyplot(fig)
+
+    # Ajouter un petit titre sous le graphique pour un seul actif avec une taille de police réduite
+    st.markdown(f"<h6 style='text-align: center; color: black;'>Volatilité des rendements - {frequence_contributions} - {actif.upper()}</h6>", unsafe_allow_html=True)
 
 
 # Téléchargement des données de l'indice ACWI IMI via yfinance
@@ -439,40 +527,143 @@ except Exception as e:
 
 # Comparaison avec l'indice ACWI IMI
 if donnees_acwi is not None:
-    st.write("### Comparaison avec l'indice ACWI IMI")
-    
+    st.markdown("""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Comparaison avec l'indice ACWI IMI</h3>
+    </div>
+""", unsafe_allow_html=True)
+
+
     # Si un deuxième actif est saisi, afficher deux graphiques côte à côte
     if donnees_autre_actif is not None and not donnees_autre_actif.empty:
         col1, col2 = st.columns(2)
-        
+
         # Premier graphique : Comparaison du premier actif avec ACWI IMI
         with col1:
-            fig, ax = plt.subplots(figsize=(6, 4))
-            ax.plot(donnees.index, donnees['Rendement Cumulé'], label=f'Portefeuille ({actif.upper()})', color='blue')
-            ax.plot(donnees_acwi.index, donnees_acwi['Rendement Cumulé'], label='Indice ACWI IMI', color='orange')
-            ax.set_xlabel('Date')
-            ax.set_ylabel('Rendement Cumulatif')
-            ax.legend()
-            st.pyplot(fig)
-        
+            trace1 = go.Scatter(
+                x=donnees.index, 
+                y=donnees['Rendement Cumulé'], 
+                mode='lines',  
+                name=f'Portefeuille ({actif.upper()})', 
+                line=dict(color='blue', width=1),  
+                hovertext=donnees['Rendement Cumulé'].round(2),  
+                hoverinfo='text'
+            )
+
+            trace2 = go.Scatter(
+                x=donnees_acwi.index, 
+                y=donnees_acwi['Rendement Cumulé'], 
+                mode='lines',  
+                name='Indice ACWI IMI', 
+                line=dict(color='orange', width=1), 
+                hovertext=donnees_acwi['Rendement Cumulé'].round(2),
+                hoverinfo='text'
+            )
+
+            layout = go.Layout(
+                xaxis=dict(title='Date'),
+                yaxis=dict(title='Rendement Cumulatif'),
+                hovermode='x unified',  
+                margin=dict(b=100),  # Ajouter de l'espace en bas du graphique pour le titre
+                annotations=[{
+                    'x': 0.5,
+                    'y': -0.25,  # Placer le titre sous l'axe des dates, plus bas
+                    'xref': 'paper',
+                    'yref': 'paper',
+                    'text': f"Comparaison de {actif.upper()} avec l'indice ACWI IMI",
+                    'showarrow': False,
+                    'font': {'size': 12, 'weight': 'bold', 'color': 'black'},  # Titre en gras et noir
+                    'align': 'center',
+                }]
+            )
+
+            fig = go.Figure(data=[trace1, trace2], layout=layout)
+            st.plotly_chart(fig)
+
         # Deuxième graphique : Comparaison du second actif avec ACWI IMI
         with col2:
-            fig, ax = plt.subplots(figsize=(6, 4))
-            ax.plot(donnees_autre.index, donnees_autre['Rendement Cumulé'], label=f'Portefeuille ({autre_actif.upper()})', color='green')
-            ax.plot(donnees_acwi.index, donnees_acwi['Rendement Cumulé'], label='Indice ACWI IMI', color='orange')
-            ax.set_xlabel('Date')
-            ax.set_ylabel('Rendement Cumulatif')
-            ax.legend()
-            st.pyplot(fig)
+            trace1 = go.Scatter(
+                x=donnees_autre.index, 
+                y=donnees_autre['Rendement Cumulé'], 
+                mode='lines',  
+                name=f'Portefeuille ({autre_actif.upper()})', 
+                line=dict(color='green', width=1), 
+                hovertext=donnees_autre['Rendement Cumulé'].round(2),  
+                hoverinfo='text'
+            )
+
+            trace2 = go.Scatter(
+                x=donnees_acwi.index, 
+                y=donnees_acwi['Rendement Cumulé'], 
+                mode='lines',  
+                name='Indice ACWI IMI', 
+                line=dict(color='orange', width=1), 
+                hovertext=donnees_acwi['Rendement Cumulé'].round(2),
+                hoverinfo='text'
+            )
+
+            layout = go.Layout(
+                xaxis=dict(title='Date'),
+                yaxis=dict(title='Rendement Cumulatif'),
+                hovermode='x unified',  
+                margin=dict(b=100),  # Ajouter de l'espace en bas du graphique pour le titre
+                annotations=[{
+                    'x': 0.5,
+                    'y': -0.25,  # Placer le titre sous l'axe des dates, plus bas
+                    'xref': 'paper',
+                    'yref': 'paper',
+                    'text': f"Comparaison de {autre_actif.upper()} avec l'indice ACWI IMI",
+                    'showarrow': False,
+                    'font': {'size': 12, 'weight': 'bold', 'color': 'black'},  # Titre en gras et noir
+                    'align': 'center',
+                }]
+            )
+
+            fig = go.Figure(data=[trace1, trace2], layout=layout)
+            st.plotly_chart(fig)
+
     else:
         # Un seul graphique si aucun autre actif n'est saisi
-        fig, ax = plt.subplots(figsize=(12, 6))
-        ax.plot(donnees.index, donnees['Rendement Cumulé'], label=f'Portefeuille ({actif.upper()})', color='blue')
-        ax.plot(donnees_acwi.index, donnees_acwi['Rendement Cumulé'], label='Indice ACWI IMI', color='orange')
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Rendement Cumulatif')
-        ax.legend()
-        st.pyplot(fig)
+        trace1 = go.Scatter(
+            x=donnees.index, 
+            y=donnees['Rendement Cumulé'], 
+            mode='lines',  
+            name=f'Portefeuille ({actif.upper()})', 
+            line=dict(color='blue', width=1),  
+            hovertext=donnees['Rendement Cumulé'].round(2),  
+            hoverinfo='text'
+        )
+
+        trace2 = go.Scatter(
+            x=donnees_acwi.index, 
+            y=donnees_acwi['Rendement Cumulé'], 
+            mode='lines',  
+            name='Indice ACWI IMI', 
+            line=dict(color='orange', width=1), 
+            hovertext=donnees_acwi['Rendement Cumulé'].round(2),
+            hoverinfo='text'
+        )
+
+        layout = go.Layout(
+            xaxis=dict(title='Date'),
+            yaxis=dict(title='Rendement Cumulatif'),
+            hovermode='x unified',  
+            margin=dict(b=100),  # Ajouter de l'espace en bas du graphique pour le titre
+            annotations=[{
+                'x': 0.5,
+                'y': -0.25,  # Placer le titre sous l'axe des dates, plus bas
+                'xref': 'paper',
+                'yref': 'paper',
+                'text': f"Comparaison de {actif.upper()} avec l'indice ACWI IMI",
+                'showarrow': False,
+                'font': {'size': 12, 'weight': 'bold', 'color': 'black'},  # Titre en gras et noir
+                'align': 'center',
+            }]
+        )
+
+        fig = go.Figure(data=[trace1, trace2], layout=layout)
+        st.plotly_chart(fig)
+
 else:
     st.warning("Les données de l'indice ACWI IMI ne sont pas disponibles pour effectuer la comparaison.")
 
@@ -500,7 +691,12 @@ portefeuille_dca = calcul_dca(prix_par_periode, contributions_dca[frequence_cont
 dca_df = pd.DataFrame({'Prix': prix_par_periode, 'Valeur Portefeuille DCA': portefeuille_dca}, index=prix_par_periode.index)
 
 # Comparaison des stratégies Lump Sum et DCA pour le premier actif
-st.write("### Comparaison des stratégies d'investissement : Lump Sum vs DCA")
+st.markdown("""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Comparaison des stratégies d'investissement : Lump Sum vs DCA</h3>
+    </div>
+""", unsafe_allow_html=True)
+
 
 if donnees_autre_actif is not None and not donnees_autre_actif.empty:
     # Calcul des prix par période pour le deuxième actif
@@ -515,59 +711,129 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
 
     # Premier actif : Lump Sum vs DCA
     with col1:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(donnees.index, donnees['Valeur Lump Sum'], label='Lump Sum', color='blue')
-        ax.plot(dca_df.index, dca_df['Valeur Portefeuille DCA'], label=f'DCA {frequence_contributions}', color='green')
+        trace1 = go.Scatter(
+            x=donnees.index, 
+            y=donnees['Valeur Lump Sum'], 
+            mode='lines',  
+            name='Lump Sum', 
+            line=dict(color='blue', width=1),  
+            hovertext=donnees['Valeur Lump Sum'].round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
 
-        # Ajouter le symbole en haut à gauche
-        ax.text(0.02, 0.98, f"{actif.upper()}",
-                transform=ax.transAxes, fontsize=10, fontweight='normal',
-                color='black', ha='left', va='top',
-                bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
+        trace2 = go.Scatter(
+            x=dca_df.index, 
+            y=dca_df['Valeur Portefeuille DCA'], 
+            mode='lines',  
+            name=f'DCA {frequence_contributions}', 
+            line=dict(color='green', width=1), 
+            hovertext=dca_df['Valeur Portefeuille DCA'].round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
 
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Valeur du Portefeuille (€)")
-        ax.legend()
-        st.pyplot(fig)
+        layout = go.Layout(
+            xaxis=dict(title='Date'),
+            yaxis=dict(title="Valeur du Portefeuille (€)"),
+            hovermode='x unified',  
+            margin=dict(b=100),  # Ajouter de l'espace en bas du graphique pour le titre
+            annotations=[{
+                'x': 0.5,
+                'y': -0.25,  # Placer le titre sous l'axe des dates, plus bas
+                'xref': 'paper',
+                'yref': 'paper',
+                'text': f"Lump Sum vs DCA (Premier Actif)",
+                'showarrow': False,
+                'font': {'size': 12, 'weight': 'bold', 'color': 'black'},  # Titre en gras et noir
+                'align': 'center',
+            }]
+        )
+
+        fig = go.Figure(data=[trace1, trace2], layout=layout)
+        st.plotly_chart(fig, key="graph_actif_unique")
 
     # Deuxième actif : Lump Sum vs DCA
     with col2:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(donnees_autre.index, montant_initial * donnees_autre['Rendement Cumulé'], label='Lump Sum', color='blue')
-        ax.plot(dca_df_autre.index, dca_df_autre['Valeur Portefeuille DCA'], label=f'DCA {frequence_contributions}', color='green')
+        trace1 = go.Scatter(
+            x=donnees_autre.index, 
+            y=montant_initial * donnees_autre['Rendement Cumulé'], 
+            mode='lines',  
+            name='Lump Sum', 
+            line=dict(color='blue', width=1),  
+            hovertext=(montant_initial * donnees_autre['Rendement Cumulé']).round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
 
-        # Ajouter le symbole en haut à gauche
-        ax.text(0.02, 0.98, f"{autre_actif.upper()}",
-                transform=ax.transAxes, fontsize=10, fontweight='normal',
-                color='black', ha='left', va='top',
-                bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
+        trace2 = go.Scatter(
+            x=dca_df_autre.index, 
+            y=dca_df_autre['Valeur Portefeuille DCA'], 
+            mode='lines',  
+            name=f'DCA {frequence_contributions}', 
+            line=dict(color='green', width=1), 
+            hovertext=dca_df_autre['Valeur Portefeuille DCA'].round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
 
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Valeur du Portefeuille (€)")
-        ax.legend()
-        st.pyplot(fig)
+        layout = go.Layout(
+            xaxis=dict(title='Date'),
+            yaxis=dict(title="Valeur du Portefeuille (€)"),
+            hovermode='x unified',  
+            margin=dict(b=100),  # Ajouter de l'espace en bas du graphique pour le titre
+            annotations=[{
+                'x': 0.5,
+                'y': -0.25,  # Placer le titre sous l'axe des dates, plus bas
+                'xref': 'paper',
+                'yref': 'paper',
+                'text': f"Lump Sum vs DCA (Deuxième Actif)",
+                'showarrow': False,
+                'font': {'size': 12, 'weight': 'bold', 'color': 'black'},  # Titre en gras et noir
+                'align': 'center',
+            }]
+        )
+
+        fig = go.Figure(data=[trace1, trace2], layout=layout)
+        st.plotly_chart(fig, key="graph_actif_secondaire")
 
 else:
     # Si aucun deuxième actif n'est saisi, afficher uniquement le premier graphique
-    fig, ax = plt.subplots(figsize=(8, 6))
-    ax.plot(donnees.index, donnees['Valeur Lump Sum'], label='Lump Sum', color='blue')
-    ax.plot(dca_df.index, dca_df['Valeur Portefeuille DCA'], label=f'DCA {frequence_contributions}', color='green')
+    trace1 = go.Scatter(
+        x=donnees.index, 
+        y=donnees['Valeur Lump Sum'], 
+        mode='lines',  
+        name='Lump Sum', 
+        line=dict(color='blue', width=1),  
+        hovertext=donnees['Valeur Lump Sum'].round(2),  # Affichage des montants au survol
+        hoverinfo='text'
+    )
 
-    # Ajouter le symbole en haut à gauche
-    ax.text(0.02, 0.98, f"{actif.upper()}",
-            transform=ax.transAxes, fontsize=10, fontweight='normal',
-            color='black', ha='left', va='top',
-            bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
+    trace2 = go.Scatter(
+        x=dca_df.index, 
+        y=dca_df['Valeur Portefeuille DCA'], 
+        mode='lines',  
+        name=f'DCA {frequence_contributions}', 
+        line=dict(color='green', width=1), 
+        hovertext=dca_df['Valeur Portefeuille DCA'].round(2),  # Affichage des montants au survol
+        hoverinfo='text'
+    )
 
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Valeur du Portefeuille (€)")
-    ax.legend()
-    st.pyplot(fig)
+    layout = go.Layout(
+        xaxis=dict(title='Date'),
+        yaxis=dict(title="Valeur du Portefeuille (€)"),
+        hovermode='x unified',  
+        margin=dict(b=100),  # Ajouter de l'espace en bas du graphique pour le titre
+        annotations=[{
+            'x': 0.5,
+            'y': -0.25,  # Placer le titre sous l'axe des dates, plus bas
+            'xref': 'paper',
+            'yref': 'paper',
+            'text': f"Lump Sum vs DCA (Premier Actif)",
+            'showarrow': False,
+            'font': {'size': 12, 'weight': 'bold', 'color': 'black'},  # Titre en gras et noir
+            'align': 'center',
+        }]
+    )
 
-# Affichage des résultats finaux
-st.write("## Résultats Finaux")
-st.write(f"**Valeur finale Lump Sum :** {donnees['Valeur Lump Sum'].iloc[-1]:.2f} €")
-st.write(f"**Valeur finale DCA ({frequence_contributions}) :** {dca_df['Valeur Portefeuille DCA'].iloc[-1]:.2f} €")
+    fig = go.Figure(data=[trace1, trace2], layout=layout)
+    st.plotly_chart(fig, key="graph_actif_unique")
 
 # Calcul des résultats pour le premier actif
 montant_final_lump_sum = donnees['Valeur Lump Sum'].iloc[-1]
@@ -613,28 +879,126 @@ def highlight_table(valeur):
     else:  # Couleur verte pour les gains
         return 'color: green; font-weight: bold;'
 
-# Transposer le tableau pour l'affichage
-tableau_resultats_transpose = tableau_resultats.T
-tableau_resultats_transpose.columns = tableau_resultats_transpose.iloc[0]  # Prendre la première ligne comme en-têtes
-tableau_resultats_transpose = tableau_resultats_transpose[1:]  # Supprimer l'ancienne ligne des en-têtes
+# Fonction pour préparer le tableau à afficher
+def prepare_table(tableau):
+    tableau_transpose = tableau.T
+    tableau_transpose.columns = tableau_transpose.iloc[0]  # Prendre la première ligne comme en-têtes
+    tableau_transpose = tableau_transpose[1:]  # Supprimer l'ancienne ligne des en-têtes
+    styled_table = (
+        tableau_transpose.style
+        .applymap(highlight_table)  # Mise en forme des gains/pertes
+        .set_table_styles(header_style())  # Style de l'en-tête en bleu
+        .format({
+            "Montant Initial (€)": "{:.2f}",
+            "Montant Final (€)": "{:.2f}",
+            "Gains Réalisés (€)": "{:.2f}",
+            "Rendement Annuel Moyen (%)": "{:.2f} %",
+            "Moyenne Contributions (€)": "{:.2f}"
+        })
+    )
+    return styled_table
 
-# Application des styles avec l'en-tête en bleu
-styled_table = (
-    tableau_resultats_transpose.style
-    .applymap(highlight_table)  # Mise en forme des gains/pertes
-    .set_table_styles(header_style())  # Style de l'en-tête en bleu
-    .format({
-        "Montant Initial (€)": "{:.2f}",
-        "Montant Final (€)": "{:.2f}",
-        "Gains Réalisés (€)": "{:.2f}",
-        "Rendement Annuel Moyen (%)": "{:.2f} %",
-        "Moyenne Contributions (€)": "{:.2f}"
-    })
-)
-
-# Affichage dans Streamlit
-st.write("### Tableau comparatif des résultats d'investissement")
+# Affichage du tableau pour le premier actif
+styled_table = prepare_table(tableau_resultats)
+st.markdown("""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Tableau comparatif des résultats pour le premier actif</h3>
+    </div>
+""", unsafe_allow_html=True)
 st.table(styled_table)
+
+def calcul_dca(donnees, montant_contribution, frequence_contributions):
+    # Déterminer l'intervalle en jours en fonction de la fréquence des contributions
+    intervalle_contributions = {
+        "Mensuelle": 30,
+        "Trimestrielle": 90,
+        "Semestrielle": 180,
+        "Annuelle": 365
+    }.get(frequence_contributions, 30)
+
+    portefeuille = 0
+    valeurs_portefeuille = []
+
+    # Calculer la valeur du portefeuille en fonction de la fréquence des contributions
+    for i, prix in enumerate(donnees['Adj Close'].values):  # Utilisez `.values` pour travailler avec des nombres
+        if i % intervalle_contributions == 0:
+            portefeuille += montant_contribution / prix  # Achat d'actifs à chaque contribution
+        valeurs_portefeuille.append(portefeuille * prix)  # Calcul de la valeur du portefeuille à cette date
+
+    donnees['Valeur Portefeuille DCA'] = valeurs_portefeuille
+    return donnees
+
+
+# Si 'autre_actif' est défini
+if autre_actif:
+    if actif.lower() == autre_actif.lower():
+        # Si les deux symboles sont identiques, utiliser une copie des données du premier actif
+        donnees_2 = donnees.copy()
+
+        # Préparer et afficher directement le tableau pour le premier actif (pas de recalcul pour le deuxième actif)
+        tableau_resultats_2 = tableau_resultats  # Supposons que vous avez déjà calculé 'tableau_resultats' pour le premier actif
+
+        # Préparer et afficher le tableau stylisé pour le premier actif
+        styled_table_2 = prepare_table(tableau_resultats_2)
+        st.markdown(f"""
+            <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+                <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Tableau comparatif des résultats pour le premier actif : {actif}</h3>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.table(styled_table_2)
+
+    else:
+        # Charger les données pour le deuxième actif uniquement si différent
+        donnees_2 = yf.download(autre_actif, start=date_debut, end=date_fin)
+        
+        # Vérifier que la colonne 'Adj Close' existe
+        if 'Adj Close' not in donnees_2.columns:
+            raise ValueError(f"La colonne 'Adj Close' est absente des données pour l'actif : {autre_actif}")
+
+        # Calculer 'Rendement Cumulé' et 'Valeur Lump Sum' pour le deuxième actif
+        donnees_2['Rendement Cumulé'] = (1 + donnees_2['Adj Close'].pct_change()).cumprod()
+        donnees_2['Valeur Lump Sum'] = montant_initial * donnees_2['Rendement Cumulé']
+        
+        # Calculer le portefeuille DCA pour le deuxième actif
+        donnees_2 = calcul_dca(donnees_2, montant_contribution, frequence_contributions)
+
+        # Calcul des résultats pour le deuxième actif
+        montant_final_lump_sum_2 = donnees_2['Valeur Lump Sum'].iloc[-1]
+        
+        # Correction de la dernière valeur du portefeuille DCA pour éviter les listes
+        montant_final_dca_2 = donnees_2['Valeur Portefeuille DCA'].iloc[-1] if isinstance(donnees_2['Valeur Portefeuille DCA'].iloc[-1], (int, float)) else donnees_2['Valeur Portefeuille DCA'].iloc[-1][0]
+
+        gain_realise_lump_sum_2 = montant_final_lump_sum_2 - montant_initial
+        gain_realise_dca_2 = montant_final_dca_2 - montant_initial
+
+        # Calcul du rendement annuel moyen (CAGR) pour le deuxième actif
+        duree_investissement_2 = (donnees_2.index[-1] - donnees_2.index[0]).days / 365
+        cagr_lump_sum_2 = ((montant_final_lump_sum_2 / montant_initial) ** (1 / duree_investissement_2) - 1) * 100
+        cagr_dca_2 = ((montant_final_dca_2 / montant_initial) ** (1 / duree_investissement_2) - 1) * 100
+
+        # Moyenne des Contributions pour DCA du deuxième actif
+        moyenne_contributions_dca_2 = montant_contribution * (12 if frequence_contributions == "Mensuelle" else 1)
+
+        # Tableau comparatif pour le deuxième actif
+        tableau_resultats_2 = pd.DataFrame({
+            "Stratégie": ["Lump Sum", f"DCA ({frequence_contributions})"],
+            "Montant Initial (€)": [montant_initial, montant_initial],
+            "Montant Final (€)": [montant_final_lump_sum_2, montant_final_dca_2],
+            "Gains Réalisés (€)": [gain_realise_lump_sum_2, gain_realise_dca_2],
+            "Rendement Annuel Moyen (%)": [cagr_lump_sum_2, cagr_dca_2],
+            "Moyenne Contributions (€)": ["N/A", moyenne_contributions_dca_2]
+        })
+
+        # Préparer et afficher le tableau stylisé pour le deuxième actif
+        styled_table_2 = prepare_table(tableau_resultats_2)
+        st.markdown(f"""
+            <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+                <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Tableau comparatif des résultats pour le deuxième actif : {autre_actif}</h3>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.table(styled_table_2)
 
 
 # Régression linéaire pour le premier actif
@@ -693,65 +1057,250 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
 
     donnees_total_autre = pd.concat([donnees_autre, donnees_futures_autre])
 
-# Affichage des graphiques de régression linéaire
-if donnees_autre_actif is not None and not donnees_autre_actif.empty:
-    st.write("### Régression linéaire pour prédire les rendements futurs")
+    # Affichage des graphiques de régression linéaire
+    st.markdown("""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Régression linéaire pour prédire les rendements futurs</h3>
+    </div>
+""", unsafe_allow_html=True)
+
     col1, col2 = st.columns(2)
 
     # Premier actif
     with col1:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(donnees_total.index, donnees_total['Prix Ajusté'], label='Prix réel', color='blue')
-        ax.plot(donnees_total.index, donnees_total['Prix Prévu'], label='Prix prédit', color='green')
+        trace1 = go.Scatter(
+            x=donnees_total.index, 
+            y=donnees_total['Prix Ajusté'], 
+            mode='lines',  
+            name='Prix réel', 
+            line=dict(color='blue', width=1),  
+            hovertext=donnees_total['Prix Ajusté'].round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
+
+        trace2 = go.Scatter(
+            x=donnees_total.index, 
+            y=donnees_total['Prix Prévu'], 
+            mode='lines',  
+            name='Prix prédit', 
+            line=dict(color='green', width=1), 
+            hovertext=donnees_total['Prix Prévu'].round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
+
+        # Ajouter les limites d'incertitude
+        traces_limites = []
         for i, color in zip(range(1, 4), ['green', 'orange', 'red']):
-            ax.fill_between(donnees_total.index, donnees_total[f'Limite Inférieure (±{i})'], donnees_total[f'Limite Supérieure (±{i})'], color=color, alpha=0.2)
-        ax.text(0.02, 0.98, f"{actif.upper()}",
-                transform=ax.transAxes, fontsize=10, fontweight='normal',
-                color='black', ha='left', va='top',
-                bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Prix Ajusté')
-        ax.legend()
-        st.pyplot(fig)
+            trace3 = go.Scatter(
+                x=donnees_total.index, 
+                y=donnees_total[f'Limite Supérieure (±{i})'],
+                mode='lines',
+                line=dict(color=color, dash='dash'),
+                name=f'Limite Supérieure (±{i})',
+                hovertext=donnees_total[f'Limite Supérieure (±{i})'].round(2),  # Affichage des montants au survol
+                hoverinfo='text'
+            )
+
+            trace4 = go.Scatter(
+                x=donnees_total.index, 
+                y=donnees_total[f'Limite Inférieure (±{i})'],
+                mode='lines',
+                line=dict(color=color, dash='dash'),
+                name=f'Limite Inférieure (±{i})',
+                hovertext=donnees_total[f'Limite Inférieure (±{i})'].round(2),  # Affichage des montants au survol
+                hoverinfo='text'
+            )
+
+            traces_limites.extend([trace3, trace4])
+
+        fig = go.Figure(data=[trace1, trace2] + traces_limites)
+
+        # Ajuster les annotations pour le titre sous le graphique (quand il y a 2 actifs)
+        fig.update_layout(
+            xaxis=dict(title='Date'),
+            yaxis=dict(title="Prix Ajusté"),
+            hovermode='x unified',  
+            margin=dict(b=150),  # Plus d'espace en bas
+            annotations=[{
+                'x': 0.5,
+                'y': -0.35,  # Placer le titre un peu plus bas sous l'axe des dates
+                'xref': 'paper',
+                'yref': 'paper',
+                'text': f"Régression linéaire ({actif.upper()})",
+                'showarrow': False,
+                'font': {'size': 14, 'weight': 'bold', 'color': 'black'},  # Titre en gras et noir
+                'align': 'center',
+            }]
+        )
+
+        st.plotly_chart(fig, use_container_width=True, key="graph_actif_unique_1")
 
     # Deuxième actif
     with col2:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(donnees_total_autre.index, donnees_total_autre['Prix Ajusté'], label='Prix réel', color='blue')
-        ax.plot(donnees_total_autre.index, donnees_total_autre['Prix Prévu'], label='Prix prédit', color='green')
+        trace1 = go.Scatter(
+            x=donnees_total_autre.index, 
+            y=donnees_total_autre['Prix Ajusté'], 
+            mode='lines',  
+            name='Prix réel', 
+            line=dict(color='blue', width=1),  
+            hovertext=donnees_total_autre['Prix Ajusté'].round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
+
+        trace2 = go.Scatter(
+            x=donnees_total_autre.index, 
+            y=donnees_total_autre['Prix Prévu'], 
+            mode='lines',  
+            name='Prix prédit', 
+            line=dict(color='green', width=1), 
+            hovertext=donnees_total_autre['Prix Prévu'].round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
+
+        # Ajouter les limites d'incertitude pour le deuxième actif
+        traces_limites = []
         for i, color in zip(range(1, 4), ['green', 'orange', 'red']):
-            ax.fill_between(donnees_total_autre.index, donnees_total_autre[f'Limite Inférieure (±{i})'], donnees_total_autre[f'Limite Supérieure (±{i})'], color=color, alpha=0.2)
-        ax.text(0.02, 0.98, f"{autre_actif.upper()}",
-                transform=ax.transAxes, fontsize=10, fontweight='normal',
-                color='black', ha='left', va='top',
-                bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Prix Ajusté')
-        ax.legend()
-        st.pyplot(fig)
+            trace3 = go.Scatter(
+                x=donnees_total_autre.index, 
+                y=donnees_total_autre[f'Limite Supérieure (±{i})'],
+                mode='lines',
+                line=dict(color=color, dash='dash'),
+                name=f'Limite Supérieure (±{i})',
+                hovertext=donnees_total_autre[f'Limite Supérieure (±{i})'].round(2),  # Affichage des montants au survol
+                hoverinfo='text'
+            )
+
+            trace4 = go.Scatter(
+                x=donnees_total_autre.index, 
+                y=donnees_total_autre[f'Limite Inférieure (±{i})'],
+                mode='lines',
+                line=dict(color=color, dash='dash'),
+                name=f'Limite Inférieure (±{i})',
+                hovertext=donnees_total_autre[f'Limite Inférieure (±{i})'].round(2),  # Affichage des montants au survol
+                hoverinfo='text'
+            )
+
+            traces_limites.extend([trace3, trace4])
+
+        fig = go.Figure(data=[trace1, trace2] + traces_limites)
+
+        # Ajuster les annotations pour le titre sous le graphique
+        fig.update_layout(
+            xaxis=dict(title='Date'),
+            yaxis=dict(title="Prix Ajusté"),
+            hovermode='x unified',  
+            margin=dict(b=150),  # Plus d'espace en bas
+            annotations=[{
+                'x': 0.5,
+                'y': -0.35,  # Ajuster la position sous le graphique
+                'xref': 'paper',
+                'yref': 'paper',
+                'text': f"Régression linéaire ({autre_actif.upper()})",
+                'showarrow': False,
+                'font': {'size': 14, 'weight': 'bold', 'color': 'black'},  # Titre en gras et noir
+                'align': 'center',
+            }]
+        )
+
+        st.plotly_chart(fig, use_container_width=True, key="graph_actif_unique_2")
+
 else:
-    st.write(f"### Régression linéaire ({actif.upper()}) pour prédire les rendements futurs")
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(donnees_total.index, donnees_total['Prix Ajusté'], label='Prix réel', color='blue')
-    ax.plot(donnees_total.index, donnees_total['Prix Prévu'], label='Prix prédit', color='green')
+
+    # Si aucun deuxième actif n'est saisi, afficher uniquement le premier graphique
+    st.markdown("""
+    <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Régression linéaire pour prédire les rendements futurs</h3>
+    </div>
+""", unsafe_allow_html=True)
+    
+    # Création des traces pour le premier actif
+    trace1 = go.Scatter(
+        x=donnees_total.index, 
+        y=donnees_total['Prix Ajusté'], 
+        mode='lines',  
+        name='Prix réel', 
+        line=dict(color='blue', width=1),  
+        hovertext=donnees_total['Prix Ajusté'].round(2),  # Affichage des montants au survol
+        hoverinfo='text'
+    )
+
+    trace2 = go.Scatter(
+        x=donnees_total.index, 
+        y=donnees_total['Prix Prévu'], 
+        mode='lines',  
+        name='Prix prédit', 
+        line=dict(color='green', width=1), 
+        hovertext=donnees_total['Prix Prévu'].round(2),  # Affichage des montants au survol
+        hoverinfo='text'
+    )
+
+    # Ajouter les limites d'incertitude
+    traces_limites = []
     for i, color in zip(range(1, 4), ['green', 'orange', 'red']):
-        ax.fill_between(donnees_total.index, donnees_total[f'Limite Inférieure (±{i})'], donnees_total[f'Limite Supérieure (±{i})'], color=color, alpha=0.2)
-    ax.text(0.02, 0.98, f"{actif.upper()}",
-            transform=ax.transAxes, fontsize=10, fontweight='normal',
-            color='black', ha='left', va='top',
-            bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
-    ax.set_xlabel('Date')
-    ax.set_ylabel('Prix Ajusté')
-    ax.legend()
-    st.pyplot(fig)
+        trace3 = go.Scatter(
+            x=donnees_total.index, 
+            y=donnees_total[f'Limite Supérieure (±{i})'],
+            mode='lines',
+            line=dict(color=color, dash='dash'),
+            name=f'Limite Supérieure (±{i})',
+            hovertext=donnees_total[f'Limite Supérieure (±{i})'].round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
+
+        trace4 = go.Scatter(
+            x=donnees_total.index, 
+            y=donnees_total[f'Limite Inférieure (±{i})'],
+            mode='lines',
+            line=dict(color=color, dash='dash'),
+            name=f'Limite Inférieure (±{i})',
+            hovertext=donnees_total[f'Limite Inférieure (±{i})'].round(2),  # Affichage des montants au survol
+            hoverinfo='text'
+        )
+
+        traces_limites.extend([trace3, trace4])
+
+    # Créer le graphique avec toutes les traces
+    fig = go.Figure(data=[trace1, trace2] + traces_limites)
+
+    fig.update_layout(
+        xaxis=dict(title='Date'),
+        yaxis=dict(title="Prix Ajusté"),
+        hovermode='x unified',  
+        margin=dict(b=150),  # Plus d'espace en bas
+        annotations=[{
+            'x': 0.5,
+            'y': -0.35,  # Placer le titre un peu plus bas sous l'axe des dates
+            'xref': 'paper',
+            'yref': 'paper',
+            'text': f"Régression linéaire ({actif.upper()})",
+            'showarrow': False,
+            'font': {'size': 14, 'weight': 'bold', 'color': 'black'},  # Titre en gras et noir
+            'align': 'center',
+        }]
+    )
+
+    # Afficher le graphique
+    st.plotly_chart(fig, use_container_width=True, key="graph_actif_unique_1")
+
+
+# Fonction pour définir le chemin de la police selon le système
+def get_font_path():
+    system = platform.system()
+    if system == 'Windows':
+        return r'C:\Windows\Fonts\arial.ttf'  # Windows
+    elif system == 'Darwin':  # macOS
+        return '/System/Library/Fonts/Helvetica.ttf'
+    else:  # Linux
+        return '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+
 # Fonction pour créer un PDF
 def creer_pdf():
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # Chemin vers la police Arial
-    font_path = r'C:\Windows\Fonts\arial.ttf'  # Remplacez par le chemin correct
+    # Déterminer le chemin de la police
+    font_path = get_font_path()  # Obtenir la police correcte pour chaque système
 
     # Utiliser une police Unicode
     pdf.add_font('Arial', '', font_path, uni=True)
@@ -771,13 +1320,49 @@ def creer_pdf():
     pdf.cell(200, 10, txt=f"Valeur finale DCA {frequence_contributions}: {dca_df['Valeur Portefeuille DCA'].iloc[-1]:.2f} €", ln=True)
 
     # Graphiques sous forme d'images
+    # Ajouter ici le graphique de comparaison avec l'indice ACWI IMI
+    if donnees_acwi is not None:
+        fig1 = go.Figure()
+
+        # Tracé du graphique avec titre
+        fig1.add_trace(go.Scatter(
+            x=donnees.index, 
+            y=donnees['Rendement Cumulé'], 
+            mode='lines',  
+            name=f'Portefeuille ({actif.upper()})', 
+            line=dict(color='blue', width=1)
+        ))
+
+        fig1.add_trace(go.Scatter(
+            x=donnees_acwi.index, 
+            y=donnees_acwi['Rendement Cumulé'], 
+            mode='lines',  
+            name='Indice ACWI IMI', 
+            line=dict(color='orange', width=1)
+        ))
+
+        # Ajouter un titre au graphique
+        fig1.update_layout(
+            title=f"Comparaison de {actif.upper()} avec l'indice ACWI IMI",
+            title_x=0.5  # Centrer le titre
+        )
+
+        # Enregistrer le graphique comme image
+        fig1_image_path = "graphique_comparaison_acwi.png"
+        pio.write_image(fig1, fig1_image_path)
+
+        # Ajouter le graphique au PDF
+        pdf.add_page()
+        pdf.image(fig1_image_path, x=10, y=30, w=180)
+
+    # Enregistrer les autres graphiques si nécessaire
     for fig_num, fig in enumerate(plt.get_fignums(), start=1):
         plt.figure(fig)
         plt.savefig(f"figure_{fig_num}.png")
         pdf.add_page()
         pdf.image(f"figure_{fig_num}.png", x=10, y=30, w=180)
 
-    # Sauvegarde temporaire
+    # Sauvegarde temporaire du PDF
     pdf_path = "rapport_analyse.pdf"
     pdf.output(pdf_path)
     return pdf_path
