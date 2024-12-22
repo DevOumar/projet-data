@@ -150,7 +150,13 @@ if donnees_brutes is None:
     st.stop()  # Arrête l'exécution du script après avoir affiché l'erreur pour le premier actif
 
 # Traitement pour le premier actif
-donnees = donnees_brutes[['Adj Close']].copy()
+if 'Adj Close' in donnees_brutes.columns:
+    donnees = donnees_brutes[['Adj Close']].copy()
+else:
+    donnees = donnees_brutes[['Close']].copy()
+
+# Vérifier s'il y a des valeurs manquantes et les traiter
+donnees = donnees.fillna(method='ffill')
 donnees.columns = ['Prix Ajusté']
 donnees['Rendement Quotidien'] = donnees['Prix Ajusté'].pct_change()
 donnees['Rendement Cumulé'] = (1 + donnees['Rendement Quotidien']).cumprod()
