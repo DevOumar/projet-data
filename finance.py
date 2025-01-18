@@ -1,3 +1,5 @@
+# Application developpé par OUMAR CISSE et ASMAA MEDHI
+# importation des librairies nécessaires
 import os
 os.system("pip install --upgrade pip")
 import yfinance as yf
@@ -152,14 +154,9 @@ if donnees_brutes is None:
 # Traitement pour le premier actif
 if 'Adj Close' in donnees_brutes.columns:
     donnees = donnees_brutes[['Adj Close']].copy()
-else:
-    donnees = donnees_brutes[['Close']].copy()
-
-# Vérifier s'il y a des valeurs manquantes et les traiter
-donnees = donnees.fillna(method='ffill')
-donnees.columns = ['Prix Ajusté']
-donnees['Rendement Quotidien'] = donnees['Prix Ajusté'].pct_change()
-donnees['Rendement Cumulé'] = (1 + donnees['Rendement Quotidien']).cumprod()
+    donnees.columns = ['Prix Ajusté']
+    donnees['Rendement Quotidien'] = donnees['Prix Ajusté'].pct_change()
+    donnees['Rendement Cumulé'] = (1 + donnees['Rendement Quotidien']).cumprod()
 
 volatilite_portefeuille = donnees['Rendement Quotidien'].std() * np.sqrt(252)
 rendement_portefeuille = donnees['Rendement Quotidien'].mean() * 252
@@ -193,7 +190,7 @@ if donnees_autre_actif is not None and not donnees_autre_actif.empty:
     rendement_total_autre = ((valeur_finale_autre - valeur_initiale_autre) / valeur_initiale_autre) * 100
     cagr_autre = ((valeur_finale_autre / valeur_initiale_autre) ** (1 / nombre_annees) - 1) * 100
 else:
-    donnees_autre = None  # Assurez-vous que cette variable est définie
+    donnees_autre = None  # Garantir que cette variable est définie
 
 if donnees_autre is not None:
     st.markdown(f"""
@@ -866,7 +863,7 @@ moyenne_contributions_dca = montant_contribution * (12 if frequence_contribution
 
 # Tableau comparatif pour le premier actif
 tableau_resultats = pd.DataFrame({
-    "Stratégie": ["Lump Sum", f"DCA ({frequence_contributions})"],
+    "Métrique/Stratégie": ["Lump Sum", f"DCA ({frequence_contributions})"],
     "Montant Initial (€)": [montant_initial, montant_initial],
     "Montant Final (€)": [montant_final_lump_sum, montant_final_dca],
     "Gains Réalisés (€)": [gain_realise_lump_sum, gain_realise_dca],
@@ -920,6 +917,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.table(styled_table)
 
+
 def calcul_dca(donnees, montant_contribution, frequence_contributions):
     # Déterminer l'intervalle en jours en fonction de la fréquence des contributions
     intervalle_contributions = {
@@ -933,7 +931,7 @@ def calcul_dca(donnees, montant_contribution, frequence_contributions):
     valeurs_portefeuille = []
 
     # Calculer la valeur du portefeuille en fonction de la fréquence des contributions
-    for i, prix in enumerate(donnees['Adj Close'].values):  # Utilisez `.values` pour travailler avec des nombres
+    for i, prix in enumerate(donnees['Adj Close'].values):  # On utilise `.values` pour travailler avec des nombres
         if i % intervalle_contributions == 0:
             portefeuille += montant_contribution / prix  # Achat d'actifs à chaque contribution
         valeurs_portefeuille.append(portefeuille * prix)  # Calcul de la valeur du portefeuille à cette date
@@ -949,7 +947,7 @@ if autre_actif:
         donnees_2 = donnees.copy()
 
         # Préparer et afficher directement le tableau pour le premier actif (pas de recalcul pour le deuxième actif)
-        tableau_resultats_2 = tableau_resultats  # Supposons que vous avez déjà calculé 'tableau_resultats' pour le premier actif
+        tableau_resultats_2 = tableau_resultats  # Supposons qu'on a déjà calculé 'tableau_resultats' pour le premier actif
 
         # Préparer et afficher le tableau stylisé pour le premier actif
         styled_table_2 = prepare_table(tableau_resultats_2)
@@ -995,7 +993,7 @@ if autre_actif:
 
         # Tableau comparatif pour le deuxième actif
         tableau_resultats_2 = pd.DataFrame({
-            "Stratégie": ["Lump Sum", f"DCA ({frequence_contributions})"],
+            "Métrique/Stratégie": ["Lump Sum", f"DCA ({frequence_contributions})"],
             "Montant Initial (€)": [montant_initial, montant_initial],
             "Montant Final (€)": [montant_final_lump_sum_2, montant_final_dca_2],
             "Gains Réalisés (€)": [gain_realise_lump_sum_2, gain_realise_dca_2],
@@ -1332,8 +1330,7 @@ def creer_pdf():
     pdf.cell(200, 10, txt=f"Valeur finale Lump Sum: {donnees['Valeur Lump Sum'].iloc[-1]:.2f} €", ln=True)
     pdf.cell(200, 10, txt=f"Valeur finale DCA {frequence_contributions}: {dca_df['Valeur Portefeuille DCA'].iloc[-1]:.2f} €", ln=True)
 
-    # Graphiques sous forme d'images
-    # Ajouter ici le graphique de comparaison avec l'indice ACWI IMI
+    # Graphique de comparaison avec l'indice ACWI IMI
     if donnees_acwi is not None:
         fig1 = go.Figure()
 
@@ -1368,12 +1365,120 @@ def creer_pdf():
         pdf.add_page()
         pdf.image(fig1_image_path, x=10, y=30, w=180)
 
-    # Enregistrer les autres graphiques si nécessaire
-    for fig_num, fig in enumerate(plt.get_fignums(), start=1):
-        plt.figure(fig)
-        plt.savefig(f"figure_{fig_num}.png")
+    # Ajout du deuxième graphique
+   # fig2 = go.Figure()
+    # Graphique de régression linéaire pour le premier actif
+    if donnees is not None:
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(
+            x=donnees_total.index, 
+            y=donnees_total['Prix Ajusté'], 
+            mode='lines', 
+            name='Prix réel', 
+            line=dict(color='blue', width=1)
+        ))
+        fig2.add_trace(go.Scatter(
+            x=donnees_total.index, 
+            y=donnees_total['Prix Prévu'], 
+            mode='lines', 
+            name='Prix prédit', 
+            line=dict(color='green', width=1)
+        ))
+        for i, color in zip(range(1, 4), ['green', 'orange', 'red']):
+            fig2.add_trace(go.Scatter(
+                x=donnees_total.index, 
+                y=donnees_total[f'Limite Supérieure (±{i})'],
+                mode='lines',
+                line=dict(color=color, dash='dash'),
+                name=f'Limite Supérieure (±{i})'
+            ))
+            fig2.add_trace(go.Scatter(
+                x=donnees_total.index, 
+                y=donnees_total[f'Limite Inférieure (±{i})'],
+                mode='lines',
+                line=dict(color=color, dash='dash'),
+                name=f'Limite Inférieure (±{i})'
+            ))
+        fig2.update_layout(
+            title=f"Régression linéaire pour {actif.upper()}",
+            title_x=0.5
+        )
+        fig2_image_path = "regression_actif_1.png"
+        pio.write_image(fig2, fig2_image_path)
         pdf.add_page()
-        pdf.image(f"figure_{fig_num}.png", x=10, y=30, w=180)
+        pdf.image(fig2_image_path, x=10, y=30, w=180)
+
+    # Graphique de régression linéaire pour le deuxième actif (si présent)
+    if donnees_autre_actif is not None and not donnees_autre_actif.empty:
+        fig3 = go.Figure()
+        fig3.add_trace(go.Scatter(
+            x=donnees_total_autre.index, 
+            y=donnees_total_autre['Prix Ajusté'], 
+            mode='lines', 
+            name='Prix réel', 
+            line=dict(color='blue', width=1)
+        ))
+        fig3.add_trace(go.Scatter(
+            x=donnees_total_autre.index, 
+            y=donnees_total_autre['Prix Prévu'], 
+            mode='lines', 
+            name='Prix prédit', 
+            line=dict(color='green', width=1)
+        ))
+        for i, color in zip(range(1, 4), ['green', 'orange', 'red']):
+            fig3.add_trace(go.Scatter(
+                x=donnees_total_autre.index, 
+                y=donnees_total_autre[f'Limite Supérieure (±{i})'],
+                mode='lines',
+                line=dict(color=color, dash='dash'),
+                name=f'Limite Supérieure (±{i})'
+            ))
+            fig3.add_trace(go.Scatter(
+                x=donnees_total_autre.index, 
+                y=donnees_total_autre[f'Limite Inférieure (±{i})'],
+                mode='lines',
+                line=dict(color=color, dash='dash'),
+                name=f'Limite Inférieure (±{i})'
+            ))
+        fig3.update_layout(
+            title=f"Régression linéaire pour {autre_actif.upper()}",
+            title_x=0.5
+        )
+        fig3_image_path = "regression_actif_2.png"
+        pio.write_image(fig3, fig3_image_path)
+        pdf.add_page()
+        pdf.image(fig3_image_path, x=10, y=30, w=180)
+
+    # Tracé du graphique pour l'évolution des valeurs des stratégies Lump Sum et DCA
+    fig2.add_trace(go.Scatter(
+        x=donnees.index,
+        y=donnees['Valeur Lump Sum'],
+        mode='lines',
+        name='Lump Sum',
+        line=dict(color='blue', width=1)
+    ))
+
+    fig2.add_trace(go.Scatter(
+        x=dca_df.index,
+        y=dca_df['Valeur Portefeuille DCA'],
+        mode='lines',
+        name='DCA',
+        line=dict(color='green', width=1)
+    ))
+
+    # Ajouter un titre au graphique
+    fig2.update_layout(
+        title=f"Comparaison Lump Sum vs DCA",
+        title_x=0.5  # Centrer le titre
+    )
+
+    # Enregistrer le deuxième graphique comme image
+    fig2_image_path = "graphique_comparaison_lumpsum_dca.png"
+    pio.write_image(fig2, fig2_image_path)
+
+    # Ajouter le deuxième graphique au PDF
+    pdf.add_page()
+    pdf.image(fig2_image_path, x=10, y=30, w=180)
 
     # Sauvegarde temporaire du PDF
     pdf_path = "rapport_analyse.pdf"
