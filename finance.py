@@ -1,4 +1,4 @@
-# Application developpé par OUMAR CISSE et ASMAA MEDHI
+# Application developpée par OUMAR CISSE et ASMAA MEDHI
 # importation des librairies nécessaires
 import os
 os.system("pip install --upgrade pip")
