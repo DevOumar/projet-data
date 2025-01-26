@@ -1,4 +1,4 @@
-# Application developpé par OUMAR CISSE et ASMAA MEDHI
+# Application developpée par OUMAR CISSE et ASMAA MEDHI
 # importation des librairies nécessaires
 import os
 os.system("pip install --upgrade pip")
@@ -908,11 +908,12 @@ def prepare_table(tableau):
     )
     return styled_table
 
+actif = actif.upper()
 # Affichage du tableau pour le premier actif
 styled_table = prepare_table(tableau_resultats)
-st.markdown("""
+st.markdown(f"""
     <div style="border: 2px solid #A3A3A3; border-radius: 10px; padding: 10px 40px; margin-top: 30px; margin-bottom: 20px; background-color: #DCDCDC; display: inline-block;">
-        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Tableau comparatif des résultats pour le premier actif</h3>
+        <h3 style="color: #333333; font-weight: bold; margin: 0; text-align: center;">Tableau comparatif des résultats pour le premier actif : {actif}</h3>
     </div>
 """, unsafe_allow_html=True)
 st.table(styled_table)
@@ -949,6 +950,7 @@ if autre_actif:
         # Préparer et afficher directement le tableau pour le premier actif (pas de recalcul pour le deuxième actif)
         tableau_resultats_2 = tableau_resultats  # Supposons qu'on a déjà calculé 'tableau_resultats' pour le premier actif
 
+        actif = actif.upper()
         # Préparer et afficher le tableau stylisé pour le premier actif
         styled_table_2 = prepare_table(tableau_resultats_2)
         st.markdown(f"""
@@ -1001,6 +1003,7 @@ if autre_actif:
             "Moyenne Contributions (€)": ["N/A", moyenne_contributions_dca_2]
         })
 
+        autre_actif = autre_actif.upper()
         # Préparer et afficher le tableau stylisé pour le deuxième actif
         styled_table_2 = prepare_table(tableau_resultats_2)
         st.markdown(f"""
@@ -1300,9 +1303,10 @@ def get_font_path():
     if system == 'Windows':
         return r'C:\Windows\Fonts\arial.ttf'  # Windows
     elif system == 'Darwin':  # macOS
-        return '/System/Library/Fonts/Helvetica.ttf'
+        return '/System/Library/Fonts/Supplemental/Arial.ttf'  # Utiliser Arial sur macOS
     else:  # Linux
         return '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+
 
 # Fonction pour créer un PDF
 def creer_pdf():
@@ -1320,53 +1324,97 @@ def creer_pdf():
     # Titre
     pdf.cell(200, 10, txt="Rapport d'Analyse d'Investissement", ln=True, align='C')
 
-    # Ajout des métriques
-    pdf.set_font("Arial", size=10)
+    # Ajouter un espace
     pdf.ln(10)
-    pdf.cell(200, 10, txt=f"Volatilité annualisée: {volatilite_portefeuille:.2%}", ln=True)
-    pdf.cell(200, 10, txt=f"Ratio de Sharpe: {ratio_sharpe:.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Rendement total: {rendement_total:.2f}%", ln=True)
-    pdf.cell(200, 10, txt=f"CAGR: {cagr:.2f}%", ln=True)
-    pdf.cell(200, 10, txt=f"Valeur finale Lump Sum: {donnees['Valeur Lump Sum'].iloc[-1]:.2f} €", ln=True)
-    pdf.cell(200, 10, txt=f"Valeur finale DCA {frequence_contributions}: {dca_df['Valeur Portefeuille DCA'].iloc[-1]:.2f} €", ln=True)
 
-    # Graphique de comparaison avec l'indice ACWI IMI
-    if donnees_acwi is not None:
-        fig1 = go.Figure()
+    # Vérification si le second actif est présent
+    if donnees_autre_actif is not None and not donnees_autre_actif.empty:
+        donnees_autre = donnees_autre_actif[['Adj Close']].copy()
+        donnees_autre.columns = ['Prix Ajusté']
+        donnees_autre['Rendement Quotidien'] = donnees_autre['Prix Ajusté'].pct_change()
+        donnees_autre['Rendement Cumulé'] = (1 + donnees_autre['Rendement Quotidien']).cumprod()
 
-        # Tracé du graphique avec titre
-        fig1.add_trace(go.Scatter(
-            x=donnees.index, 
-            y=donnees['Rendement Cumulé'], 
-            mode='lines',  
-            name=f'Portefeuille ({actif.upper()})', 
-            line=dict(color='blue', width=1)
-        ))
+        # Calcul des métriques pour le second actif
+        volatilite_autre = donnees_autre['Rendement Quotidien'].std() * np.sqrt(252)
+        rendement_autre = donnees_autre['Rendement Quotidien'].mean() * 252
+        ratio_sharpe_autre = (rendement_autre - taux_sans_risque) / volatilite_autre
+        valeur_initiale_autre = donnees_autre['Prix Ajusté'].iloc[0]
+        valeur_finale_autre = donnees_autre['Prix Ajusté'].iloc[-1]
+        rendement_total_autre = ((valeur_finale_autre - valeur_initiale_autre) / valeur_initiale_autre) * 100
+        cagr_autre = ((valeur_finale_autre / valeur_initiale_autre) ** (1 / nombre_annees) - 1) * 100
+    else:
+        donnees_autre = None  # Garantir que cette variable est définie
+        volatilite_autre = None  # Garantir que cette variable est définie
 
-        fig1.add_trace(go.Scatter(
-            x=donnees_acwi.index, 
-            y=donnees_acwi['Rendement Cumulé'], 
-            mode='lines',  
-            name='Indice ACWI IMI', 
-            line=dict(color='orange', width=1)
-        ))
+    # Configuration du tableau
+    pdf.set_font("Arial", size=10)
+    pdf.set_fill_color(220, 220, 220)  # Couleur de fond pour l'en-tête
+    pdf.cell(50, 10, "Métriques", border=1, fill=True, align='C')
+    pdf.cell(50, 10, actif.upper(), border=1, fill=True, align='C')
+    if donnees_autre is not None and not donnees_autre.empty:
+        pdf.cell(50, 10, autre_actif.upper(), border=1, fill=True, align='C')
+    pdf.ln()
 
-        # Ajouter un titre au graphique
-        fig1.update_layout(
-            title=f"Comparaison de {actif.upper()} avec l'indice ACWI IMI",
-            title_x=0.5  # Centrer le titre
+    # Ajout des données dans le tableau
+    def add_row(label, value1, value2=None):
+        pdf.cell(50, 10, label, border=1, align='C')
+        pdf.cell(50, 10, f"{value1}", border=1, align='C')
+        if value2 is not None:
+            pdf.cell(50, 10, f"{value2}", border=1, align='C')
+        pdf.ln()
+
+    # Remplir le tableau avec les métriques
+    add_row("Volatilité des rendements", f"{volatilite_portefeuille:.2%}", f"{volatilite_autre:.2%}" if volatilite_autre else "-")
+    add_row("Ratio de Sharpe", f"{ratio_sharpe:.2f}", f"{ratio_sharpe_autre:.2f}" if ratio_sharpe_autre else "-")
+    add_row("Rendement total", f"{rendement_total:.2f}%", f"{rendement_total_autre:.2f}%" if rendement_total_autre else "-")
+    add_row("CAGR", f"{cagr:.2f}%", f"{cagr_autre:.2f}%" if cagr_autre else "-")
+
+    pdf.ln(10)
+
+    # Générer les graphiques pour les rendements
+    def create_histogram(data, title, file_name, color_positive="green", color_negative="red"):
+        rendements = data.dropna()
+        positif = rendements[rendements >= 0]
+        negatif = rendements[rendements < 0]
+
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.hist(positif, bins=20, alpha=0.7, label='Positifs', color=color_positive, edgecolor='black')
+        ax.hist(negatif, bins=20, alpha=0.7, label='Négatifs', color=color_negative, edgecolor='black')
+        ax.set_title(title)
+        ax.set_xlabel("Rendement")
+        ax.set_ylabel("Fréquence")
+        ax.legend()
+
+        # Sauvegarder le graphique
+        file_path = os.path.join("graphs", file_name)
+        os.makedirs("graphs", exist_ok=True)
+        fig.savefig(file_path)
+        plt.close(fig)
+
+        return file_path
+
+    # Graphique pour le premier actif
+    actif_histogram = create_histogram(
+        donnees['Rendement Quotidien'],
+        f"Distribution des rendements ({actif.upper()})",
+        "actif_histogram.png"
+    )
+
+    # Ajouter l'image au PDF
+    pdf.image(actif_histogram, x=10, y=None, w=180)
+
+    if donnees_autre is not None and not donnees_autre.empty:
+        # Graphique pour le deuxième actif
+        autre_actif_histogram = create_histogram(
+            donnees_autre['Rendement Quotidien'],
+            f"Distribution des rendements ({autre_actif.upper()})",
+            "autre_actif_histogram.png"
         )
 
-        # Enregistrer le graphique comme image
-        fig1_image_path = "graphique_comparaison_acwi.png"
-        pio.write_image(fig1, fig1_image_path)
-
-        # Ajouter le graphique au PDF
-        pdf.add_page()
-        pdf.image(fig1_image_path, x=10, y=30, w=180)
+        # Ajouter l'image au PDF
+        pdf.image(autre_actif_histogram, x=10, y=None, w=180)
 
     # Ajout du deuxième graphique
-   # fig2 = go.Figure()
     # Graphique de régression linéaire pour le premier actif
     if donnees is not None:
         fig2 = go.Figure()
